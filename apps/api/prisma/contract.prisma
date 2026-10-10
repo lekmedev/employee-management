@@ -1,0 +1,97 @@
+// use prisma-8
+// Source of truth cho toàn bộ DB. Mọi thay đổi đi qua migration, không sửa DB tay.
+
+enum Role {
+  ADMIN
+  VIEWER
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  ON_LEAVE
+  RESIGNED
+}
+
+model User {
+  id           String              @id @default(cuid(2))
+  email        String              @unique
+  passwordHash String
+  role         Role                @default(VIEWER)
+  createdAt    TimestamptzJsDate   @default(now())
+  updatedAt    temporal.updatedAtJsDate()
+}
+
+model Department {
+  id        String     @id @default(cuid(2))
+  name      String     @unique
+  employees Employee[]
+}
+
+model Position {
+  id           String                @id @default(cuid(2))
+  title        String                @unique
+  description  String?
+  employees    Employee[]
+  accountRoles PositionAccountRole[]
+}
+
+model Employee {
+  id           String          @id @default(cuid(2))
+  fullName     String
+  email        String          @unique
+  phone        String?
+  departmentId String?
+  department   Department?     @relation(fields: [departmentId], references: [id])
+  positionId   String?
+  position     Position?       @relation(fields: [positionId], references: [id])
+  startDate    TimestamptzJsDate
+  salary       Int?
+  status       EmployeeStatus  @default(ACTIVE)
+  createdAt    TimestamptzJsDate @default(now())
+  updatedAt    temporal.updatedAtJsDate()
+  accountLinks EmployeeAccount[]
+}
+
+// Loại tài khoản mở rộng được (Opera Cloud, PMS khác, ...).
+model AccountType {
+  id    String        @id @default(cuid(2))
+  code  String        @unique // vd: OPERA_CLOUD
+  label String                  // vd: Opera Cloud
+  roles AccountRole[]
+}
+
+model AccountRole {
+  id            String                @id @default(cuid(2))
+  accountTypeId String
+  accountType   AccountType           @relation(fields: [accountTypeId], references: [id])
+  code          String
+  label         String
+  positions     PositionAccountRole[]
+  employees     EmployeeAccount[]
+
+  @@unique([accountTypeId, code])
+}
+
+// Chức vụ -> role mặc định theo từng loại tài khoản.
+model PositionAccountRole {
+  id            String      @id @default(cuid(2))
+  positionId    String
+  position      Position    @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  accountRoleId String
+  accountRole   AccountRole @relation(fields: [accountRoleId], references: [id], onDelete: Cascade)
+
+  @@unique([positionId, accountRoleId])
+}
+
+// Gán role thực tế cho nhân viên.
+model EmployeeAccount {
+  id            String            @id @default(cuid(2))
+  employeeId    String
+  employee      Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  accountRoleId String
+  accountRole   AccountRole       @relation(fields: [accountRoleId], references: [id])
+  grantedAt     TimestamptzJsDate @default(now())
+  grantedBy     String?
+
+  @@unique([employeeId, accountRoleId])
+}
